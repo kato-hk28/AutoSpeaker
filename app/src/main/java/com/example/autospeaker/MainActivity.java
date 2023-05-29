@@ -9,14 +9,14 @@ import androidx.core.content.ContextCompat;
 
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.media.AudioAttributes;
-import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
-import android.media.SoundPool;
-import android.os.Build;
 import android.os.Bundle;
-import android.provider.MediaStore;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -24,8 +24,8 @@ import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.ListView;
-import android.widget.MediaController;
 import android.widget.TextView;
 
 import org.json.JSONArray;
@@ -43,7 +43,7 @@ import io.skyway.Peer.OnCallback;
 import io.skyway.Peer.Peer;
 import io.skyway.Peer.PeerOption;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements SensorEventListener {
 
     private Peer peer;
     private String TAG = getClass().getSimpleName();
@@ -56,16 +56,40 @@ public class MainActivity extends AppCompatActivity {
     private MediaConnection connection;
     private static final int RECORD_AUDIO_REQUEST_ID = 1;
     private AudioManager mAudioManager;
-    private int isSpeaker;
+    private boolean isSpeaker;
     private AudioAttributes audioAttributes;
     private MediaPlayer mediaPlayer;
     private MediaStream stream;
+
+    // Orientation
+    private CheckBox mCheckBoxOrientation;
+    private TextView mAzimuthText, mPitchText, mRollText;
+    private float[] mAccelerationValue = new float[3];
+    private float[] mGeoMagneticValue = new float[3];
+    private final float[] mOrientationValue = new float[3];
+    private final float[] mInRotationMatrix = new float[9];
+    private final float[] mOutRotationMatrix = new float[9];
+    private final float[] mInclinationMatrix = new float[9];
+
 
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        SensorManager sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
+        Sensor accelerationSensor  = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        Sensor magneticSensor = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+        sensorManager.registerListener(this, accelerationSensor, SensorManager.SENSOR_DELAY_NORMAL);
+        sensorManager.registerListener(this, magneticSensor, SensorManager.SENSOR_DELAY_NORMAL);
+
+        mAzimuthText = (TextView) findViewById(R.id.text_view_azimuth);
+        mRollText = (TextView) findViewById(R.id.text_view_roll);
+        mPitchText = (TextView) findViewById(R.id.text_view_pitch);
+
+        mCheckBoxOrientation = (CheckBox) findViewById(R.id.checkbox_orientation);
+
 
         idTextView = (TextView) findViewById(R.id.id_textview);
         listView = (ListView) findViewById(R.id.listview);
@@ -80,7 +104,7 @@ public class MainActivity extends AppCompatActivity {
 
         audioAttributes = new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build();
         mAudioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, 1, 1);
-        isSpeaker = 0;
+        isSpeaker = false;
 
         PeerOption options = new PeerOption();
         // BuildConfigが認識されない時は、BuildConfig.javaでSyncする。
@@ -145,23 +169,6 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View view){
                 closeConnection();
-            }
-        });
-
-
-        Button  switchBtn = (Button) findViewById(R.id.switch_btn);
-        switchBtn.setOnClickListener(new View.OnClickListener(){
-            @Override
-            public void onClick(View view){
-                if(isSpeaker == 0){
-                    isSpeaker = 1;
-                    mAudioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, mAudioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL), 1);
-                    Log.d(TAG, "SPEAKER MODE");
-                }else{
-                    mAudioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, 1, 1);
-                    isSpeaker = 0;
-                    Log.d(TAG, "VOICE MODE: volume ");
-                }
             }
         });
 
@@ -314,6 +321,44 @@ public class MainActivity extends AppCompatActivity {
             MainActivity.this.connection = null;
             Log.d(TAG, "Connection is Closed");
         }
+    }
+
+    @Override
+    public void onSensorChanged(SensorEvent sensorEvent) {
+        switch (sensorEvent.sensor.getType()){
+            case Sensor.TYPE_MAGNETIC_FIELD:mGeoMagneticValue = sensorEvent.values.clone();break;
+            case Sensor.TYPE_ACCELEROMETER:mAccelerationValue = sensorEvent.values.clone();break;
+        }
+
+        if (mCheckBoxOrientation.isChecked()){
+            SensorManager.getRotationMatrix(mInRotationMatrix, mInclinationMatrix, mAccelerationValue, mGeoMagneticValue);
+            SensorManager.remapCoordinateSystem(mInRotationMatrix, SensorManager.AXIS_X, SensorManager.AXIS_Z, mOutRotationMatrix);
+            SensorManager.getOrientation(mOutRotationMatrix, mOrientationValue);
+
+            String azimuthText = String.valueOf(Math.floor(Math.toDegrees((double)mOrientationValue[0])));
+            String pitchText = String.valueOf(Math.floor(Math.toDegrees((double)mOrientationValue[1])));
+            String rollText = String.valueOf(Math.floor(Math.toDegrees((double)mOrientationValue[2])));
+
+            double yroll = Math.floor(Math.toDegrees((double)mOrientationValue[1]));
+            if(yroll < 110 && yroll > 70 && !isSpeaker){
+                mAudioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, mAudioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL), 1);
+                isSpeaker = true;
+                Log.d(TAG, "SPEAKER MODE " + yroll);
+            }else if((yroll > 110 || yroll < 70) && isSpeaker){
+                mAudioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, 1, 1);
+                isSpeaker = false;
+                Log.d(TAG, "VOICE MODE " + yroll);
+            }
+
+            mAzimuthText.setText(azimuthText);
+            mPitchText.setText(pitchText);
+            mRollText.setText(rollText);
+        }
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+
     }
 
     private class MyAdapter extends ArrayAdapter<String> {
