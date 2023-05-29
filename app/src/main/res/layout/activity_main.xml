@@ -35,6 +35,12 @@
             android:layout_height="wrap_content"
             android:text="CLOSE" />
 
+        <Button
+            android:id="@+id/switch_btn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="SPEAKER" />
+
         <ListView
         android:layout_width="match_parent"
         android:layout_height="match_parent"

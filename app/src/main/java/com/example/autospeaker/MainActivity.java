@@ -9,7 +9,14 @@ import androidx.core.content.ContextCompat;
 
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.media.AudioAttributes;
+import android.media.AudioDeviceInfo;
+import android.media.AudioManager;
+import android.media.MediaPlayer;
+import android.media.SoundPool;
+import android.os.Build;
 import android.os.Bundle;
+import android.provider.MediaStore;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -48,6 +55,11 @@ public class MainActivity extends AppCompatActivity {
     private List<String> idList = new ArrayList<String>();
     private MediaConnection connection;
     private static final int RECORD_AUDIO_REQUEST_ID = 1;
+    private AudioManager mAudioManager;
+    private int isSpeaker;
+    private AudioAttributes audioAttributes;
+    private MediaPlayer mediaPlayer;
+    private MediaStream stream;
 
 
     @Override
@@ -60,6 +72,15 @@ public class MainActivity extends AppCompatActivity {
 
         adapter = new MyAdapter(this, 0, idList);
         listView.setAdapter(adapter);
+
+        mAudioManager = (AudioManager) this.getSystemService(Context.AUDIO_SERVICE);
+        mediaPlayer = new MediaPlayer();
+        mediaPlayer.setAudioStreamType(AudioManager.MODE_IN_COMMUNICATION);
+        mAudioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
+
+        audioAttributes = new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build();
+        mAudioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, 1, 1);
+        isSpeaker = 0;
 
         PeerOption options = new PeerOption();
         // BuildConfigが認識されない時は、BuildConfig.javaでSyncする。
@@ -83,9 +104,10 @@ public class MainActivity extends AppCompatActivity {
                         return;
                     }
 
-                    MediaStream stream = MainActivity.this.getMediaStream();
+                    stream = MainActivity.this.getMediaStream();
                     if(stream == null){
                         Log.d(TAG, "CALL Event received but MediaConnection is null");
+                        return;
                     }
                     connection.answer(stream);
                     setConnectionCallback(connection);
@@ -126,6 +148,23 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+
+        Button  switchBtn = (Button) findViewById(R.id.switch_btn);
+        switchBtn.setOnClickListener(new View.OnClickListener(){
+            @Override
+            public void onClick(View view){
+                if(isSpeaker == 0){
+                    isSpeaker = 1;
+                    mAudioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, mAudioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL), 1);
+                    Log.d(TAG, "SPEAKER MODE");
+                }else{
+                    mAudioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, 1, 1);
+                    isSpeaker = 0;
+                    Log.d(TAG, "VOICE MODE: volume ");
+                }
+            }
+        });
+
         checkAudioPermission();
     }
 
@@ -144,15 +183,13 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        switch (requestCode) {
-            case RECORD_AUDIO_REQUEST_ID: {
-                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    Log.d(TAG, "request Permission RECORD_AUDIO GRANTED!");
-                } else {
-                    Log.d(TAG, "request Permission RECORD_AUDIO DENIED!");
-                }
-                return;
+        if (requestCode == RECORD_AUDIO_REQUEST_ID) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Log.d(TAG, "request Permission RECORD_AUDIO GRANTED!");
+            } else {
+                Log.d(TAG, "request Permission RECORD_AUDIO DENIED!");
             }
+            return;
         }
     }
 
@@ -232,7 +269,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        MediaStream stream = getMediaStream();
+        stream = getMediaStream();
 
         if(stream == null){
             Log.d(TAG, "Call but MediaConnection is null");
