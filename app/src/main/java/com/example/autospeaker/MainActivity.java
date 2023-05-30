@@ -27,6 +27,7 @@ import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.ListView;
 import android.widget.TextView;
+import android.widget.ToggleButton;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -49,6 +50,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private String TAG = getClass().getSimpleName();
     private String currentId;
     private TextView idTextView;
+    private TextView idTextViewCall;
 
     private ListView listView;
     private MyAdapter adapter;
@@ -62,8 +64,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private MediaStream stream;
 
     // Orientation
-    private CheckBox mCheckBoxOrientation;
-    private TextView mAzimuthText, mPitchText, mRollText;
+    private ToggleButton mCheckBoxOrientation;
     private float[] mAccelerationValue = new float[3];
     private float[] mGeoMagneticValue = new float[3];
     private final float[] mOrientationValue = new float[3];
@@ -78,17 +79,15 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        idTextViewCall = (TextView) findViewById(R.id.calling_peer_text);
+
         SensorManager sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
         Sensor accelerationSensor  = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         Sensor magneticSensor = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
         sensorManager.registerListener(this, accelerationSensor, SensorManager.SENSOR_DELAY_NORMAL);
         sensorManager.registerListener(this, magneticSensor, SensorManager.SENSOR_DELAY_NORMAL);
 
-        mAzimuthText = (TextView) findViewById(R.id.text_view_azimuth);
-        mRollText = (TextView) findViewById(R.id.text_view_roll);
-        mPitchText = (TextView) findViewById(R.id.text_view_pitch);
-
-        mCheckBoxOrientation = (CheckBox) findViewById(R.id.checkbox_orientation);
+        mCheckBoxOrientation = (ToggleButton) findViewById(R.id.checkbox_orientation);
 
 
         idTextView = (TextView) findViewById(R.id.id_textview);
@@ -104,7 +103,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         audioAttributes = new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build();
         mAudioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, 1, 1);
-        isSpeaker = false;
+        isSpeaker = true;
 
         PeerOption options = new PeerOption();
         // BuildConfigが認識されない時は、BuildConfig.javaでSyncする。
@@ -137,6 +136,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     setConnectionCallback(connection);
                     MainActivity.this.connection = connection;
                     Log.d(TAG, "CALL Event is Received and Set");
+                    idTextViewCall.setText(connection.peer());
                 }
             }
         });
@@ -296,6 +296,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         this.connection = connection;
         Log.d(TAG, "connection started!");
+        idTextViewCall.setText(peerId);
     }
 
     private MediaStream getMediaStream() {
@@ -320,6 +321,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             connection.close();
             MainActivity.this.connection = null;
             Log.d(TAG, "Connection is Closed");
+            idTextViewCall.setText("");
         }
     }
 
@@ -349,10 +351,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 isSpeaker = false;
                 Log.d(TAG, "VOICE MODE " + yroll);
             }
-
-            mAzimuthText.setText(azimuthText);
-            mPitchText.setText(pitchText);
-            mRollText.setText(rollText);
         }
     }
 
